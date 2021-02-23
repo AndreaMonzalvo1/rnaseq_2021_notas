@@ -1,1 +1,34 @@
-Holiwis kiwis
+Revisión de algunos paquetes de Bioconductor nuevos.
+
+ChromSCape
+Es un paquete que perfila el paisaje de cromatina para Single Cell, analiza conjuntos de datos de epigenética y cubre pasos como el preprocesamiento, filtrado, batch correction, visualización, clustering análisis diferencial y análisis de conjuntos de genes. 
+La documentación no es muy extensa pero es clara y hasta el momento no hay preguntas de usuarios. Hasta ahora funciona en todas las plataformas.
+El repositorio tiene orden, aunque la documentación del código no es tan explícita.
+
+
+ToxicoGx
+El paquete permite analizar datos toxico genomicos, tanto para visualización y analisis de estos datos. 
+
+- En las pruebas en las distintas plataformas no se han encontrados errores 
+- Hay una documentación adecuada y ejemplos de uso
+- No tiene preguntas hasta ahora
+
+La URL al codigo no esta clara
+Link: https://bioconductor.org/packages/release/bioc/html/ToxicoGx.html
+
+
+Nebulosa
+Permite una visualización de datos de experimentos de una sola celula.
+
+- Presenta errores en todas las plataformas
+- Documentación bastante breve
+- No tiene preguntas hasta ahora
+
+Link: https://bioconductor.org/packages/release/bioc/html/Nebulosa.html
+
+
+Velociraptor:
+El paquete de velociraptor proporciona un “wrapper” para cálculos de velocidad de ARN en datos de ARN-seq de una sola célula. Se utilizan paquetes como basilisk y zellkonverter para convertir los datos de SingleCellExperiment (R) y AnnData (Python). Su documentación es aceptable, clara, siento que le falta en algunos puntos. Como es su primera versión es aceptable, pero las preguntas hechas no han sido resueltas en su totalidad.
+
+URL
+-http://bioconductor.org/packages/release/bioc/html/velociraptor.html
