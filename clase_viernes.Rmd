@@ -1,0 +1,31 @@
+---
+title: "Clase_viernes"
+author: "Andrea Monzalvo"
+date: "26/2/2021"
+output: html_document
+---
+
+```{r}
+speaqeasy_data <- file.path(tempdir(), "rse_speaqeasy.RData")
+download.file("https://github.com/LieberInstitute/SPEAQeasy-example/blob/master/rse_speaqeasy.RData?raw=true", speaqeasy_data, mode = "wb")
+library("SummarizedExperiment")
+load(speaqeasy_data, verbose = TRUE)
+```
+#Pregunta 1
+rse_gene$Bipolar<-factor(ifelse(rse_gene$PrimaryDx=='Bipolar',"Bipolar","Control"))
+with(colData(rse_gene),tapply(totalAssignedGene,Bipolar,summary))
+with(colData(rse_gene),tapply(mitoRate,Bipolar,summary))
+
+#Pregunta 2
+
+gene_pos<- match('SNAP25',rowRanges(rse_gene)$Symbol)
+assay(rse_gene)
+boxplot(with(colData(rse_gene),tapply(assay(rse_gene[gene_pos]),Bipolar,as.vector)))
+
+#Pregunta 3
+
+mod <- with(
+    colData(rse_gene),
+    model.matrix(~ PrimaryDx + totalAssignedGene + mitoRate + rRNA_rate + BrainRegion + Sex + AgeDeath)
+
+
