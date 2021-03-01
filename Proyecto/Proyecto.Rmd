@@ -1,0 +1,358 @@
+---
+title: "Proyecto"
+author: "Andrea Monzalvo"
+date: "28/2/2021"
+output: 
+  html_document:
+    df_print: paged
+    code_folding: show
+    self_contained: yes
+    theme: darkly
+    highlight: breezedark
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+# Descarga de datos
+
+El set de datos que seleccioné era un perfil de RNA-seq de pacientes con Parkinson
+
+```{r download_SRP045638, message=FALSE}
+library("recount3")
+
+human_projects <- available_projects()
+
+rse_gene_Parkinson <- create_rse(
+    subset(
+        human_projects,
+        project == "ERP014707" & project_type == "data_sources"
+    )
+)
+assay(rse_gene_Parkinson, "counts") <- compute_read_counts(rse_gene_Parkinson)
+```
+
+### Explorar los atributos 
+
+```{r}
+rse_gene_Parkinson$sra.sample_attributes[1:3]
+```
+
+Parece que hay un campo de descripción muy largo que sería mejor quitar:
+
+```{r}
+rse_gene_Parkinson$sra.sample_attributes <- gsub("\\|Description;;Protocols: Total RNAs were extracted with Trizol reagent \\(Invitrogen\\) and purified with RNeasy Mini kit \\(Qiagen\\), according to the manufacturers' instructions\\. NPCs were generated using an adapted protocol \\(Li et al\\., 2011\\)\\. NPCs were regularly cultured in maintenance contained N2B27 medium supplemented with 3 Î¼M CHIR99021, 2 Î¼M SB431542, 5 Î¼g/mL BSA, 20 ng/ml bFGF and 20 ng/ml EGF\\. Differentiation of NPCs into mDA neurons was initiated one day after passaging the NPCs on Poly\\-L\\-ornithine hydrochloride/Laminin coated culture\\. NPC maintenance medium was substituted by mDA patterning medium consisting of N2B27 medium supplemented with FGF8, Purmorphamine, Dibutyryl cAMP \\(db\\-cAMP\\) and L\\-ascorbic acid \\(L\\-AA\\) for 14 days\\.", "", rse_gene_Parkinson$sra.sample_attributes)
+
+rse_gene_Parkinson$sra.sample_attributes <- gsub (" From days 14, cells were fed with maturation medium consisting of GDNF, BDNF, DAPT, db-cAMP and L\\-AA\\. unspecified Total RNAs were extracted with Trizol reagent \\(Invitrogen\\) and purified with RNeasy Mini kit \\(Qiagen\\), according to the manufacturers' instructions\\. Ribosomal\\-RNAs were depleted from 4Î¼g total RNAs by using Ribo-Zero Gold rRNA Removal Kit \\(Human/Mouse/Rat\\) \\(Epicentre Illumina\\)\\. And RNA sequencing libraries were constructed by using 20ng ribosomal RNA\\-depleted total RNA samples with NEBNextÂ® UltraTM RNA Library Prep Kit for IlluminaÂ® \\(New England Biolabs\\)\\. RNA sequencing at a 51bp single\\-end read scale was performed on an Illumina Platform HiSeq2000 \\(Genome Institute of Singapore, Singapore\\), using ribosomal RNA\\-depleted RNA from two biological replicates of the wild type cell lines GM23280A, GM23279A and IR1\\.7 and PD iPSC lines ND34391, ND35367, ND38477 cell at NPC stage and mDA stage\\. For detecting alternative splicing events, RNA sequencing libraries were generated from intact poly \\(A\\)\\+ RNAs prepared by using Oligo d\\(T\\)25 Magnetic Beads \\(New England Biolabs\\)\\. RNA sequencing was conducted on an Illumina Platform HiSeq2000 at a 101bp paired\\-end read scale \\(Genome Institute of Singapore, Singapore\\)","", rse_gene_Parkinson$sra.sample_attributes)
+
+
+rse_gene_Parkinson$sra.sample_attributes[1:2]
+```
+
+Ver cómo quedan los atributos limpios
+
+```{r}
+rse_gene_Parkinson <- expand_sra_attributes(rse_gene_Parkinson)
+
+colData(rse_gene_Parkinson)[
+    ,
+    grepl("^sra_attribute", colnames(colData(rse_gene_Parkinson)))
+    
+]
+
+```
+
+### Algunos atributos de interés para el análisis
+
+sra_attribute.disease
+sra_attribute.obsolete_sex
+sra_attribute.genotype
+sra_attribute.cell_line
+
+```{r}
+#Enfermedad
+rse_gene_Parkinson$sra_attribute.disease <- as.factor(rse_gene_Parkinson$sra_attribute.disease)
+#Sexo
+rse_gene_Parkinson$sra_attribute.obsolete_sex <- factor(rse_gene_Parkinson$sra_attribute.obsolete_sex)
+#Genotipo(mutación)
+rse_gene_Parkinson$sra_attribute.genotype <- as.factor(rse_gene_Parkinson$sra_attribute.genotype)
+#Linea celular
+rse_gene_Parkinson$sra_attribute.cell_line <- factor(rse_gene_Parkinson$sra_attribute.cell_line)
+
+
+```
+
+```{r}
+#Una vista a los niveles en cada atributo
+rse_gene_Parkinson$sra_attribute.disease
+rse_gene_Parkinson$sra_attribute.obsolete_sex
+rse_gene_Parkinson$sra_attribute.genotype
+rse_gene_Parkinson$sra_attribute.cell_line
+```
+### Resumen de las variables de interés
+
+```{r}
+# Resumen de las variables de interés
+summary(as.data.frame(colData(rse_gene_Parkinson)[
+    ,
+    grepl("^sra_attribute.[disease|genotype|cell_line|obsolete_sex]", colnames(colData(rse_gene_Parkinson)))
+]))
+```
+```{r}
+with(colData(rse_gene_Parkinson), tapply(sra_attribute.disease, sra_attribute.obsolete_sex, summary))
+with(colData(rse_gene_Parkinson), tapply(sra_attribute.genotype, sra_attribute.obsolete_sex, summary))
+```
+
+# Filtrado
+
+```{r}
+# Guardar copia de seguridad 
+rse_gene_Parkinson_unfiltered <- rse_gene_Parkinson
+```
+
+En un análisis donde se ovuparon todas las muestras independientemente del sexo, se notó que muchos genes con expresión diferencial estaban relacionados con las diferencias sexuales, como espermatogénesis. Por ello se decidió hacer dos análisis independientes, uno con mujeres y otro con hombres.
+
+## Mujeres
+
+```{r}
+#filtrado muestras
+rse_gene_Parkinson_female <- rse_gene_Parkinson[,rse_gene_Parkinson$sra_attribute.obsolete_sex == 'Female']
+rse_gene_Parkinson_female$sra_attribute.obsolete_sex <- droplevels(rse_gene_Parkinson_female$sra_attribute.obsolete_sex)
+rse_gene_Parkinson_female$sra_attribute.obsolete_sex
+# Calculo de los niveles medios de expresión de los genes en las muestras.
+
+gene_means <- rowMeans(assay(rse_gene_Parkinson_female, "counts"))
+summary(gene_means)
+
+## Eliminamos genes con un promedio de expresión menor que la mediana
+rse_gene_Parkinson_female <- rse_gene_Parkinson_female[gene_means > 3.1, ]
+
+## Dimensiones finales
+dim(rse_gene_Parkinson_female)
+
+## Porcentaje de genes que retuvimos
+round(nrow(rse_gene_Parkinson_female) / nrow(rse_gene_Parkinson_unfiltered) * 100, 2)
+
+```
+### Normalización de datos
+
+```{r}
+library("edgeR") # BiocManager::install("edgeR", update = FALSE)
+dge <- DGEList(
+    counts = assay(rse_gene_Parkinson_female, "counts"),
+    genes = rowData(rse_gene_Parkinson_female)
+)
+dge <- calcNormFactors(dge)
+
+```
+
+
+### Modelo
+
+```{r}
+  mod <- model.matrix(~ sra_attribute.disease,
+    data = colData(rse_gene_Parkinson_female)
+)
+colnames(mod)  
+```
+### Expresión diferencial
+
+Análisis de expresión diferencial con modelo estadístico.
+
+```{r run_limma_female}
+library("limma")
+vGene <- voom(dge, mod, plot = TRUE)
+
+eb_results <- eBayes(lmFit(vGene))
+
+de_results <- topTable(
+    eb_results,
+    coef = 2,
+    number = nrow(rse_gene_Parkinson_female),
+    sort.by = 'none'
+)
+dim(de_results)
+head(de_results)
+
+## Genes diferencialmente expresados entre pre y post natal con FDR < 5%
+table(de_results$adj.P.Val < 0.05)
+
+## Visualicemos los resultados estadísticos
+limma::plotMA(eb_results, coef = 2)
+
+volcanoplot(eb_results, coef = 2, highlight = 10, names = de_results$gene_name)
+```
+
+### PDF de heatmap
+
+
+```{r pheatmap_female,message=FALSE}
+## Extraer valores de los genes de interés
+exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+
+## Creemos una tabla con información de las muestras
+## y con nombres de columnas más amigables
+df <- as.data.frame(colData(rse_gene_Parkinson_female)[, c("sra_attribute.disease", "sra_attribute.obsolete_sex")])
+colnames(df) <- c("Disease", "Sex")
+
+
+rownames(exprs_heatmap) <- rowRanges(rse_gene_Parkinson_female)$gene_name[
+    match(rownames(exprs_heatmap), rowRanges(rse_gene_Parkinson_female)$gene_id)
+]
+library("pheatmap")
+
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = TRUE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+
+```
+```{r}
+pdf("pheatmap_Parkinson_female.pdf", height = 14, useDingbats = FALSE)
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = TRUE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+dev.off()
+```
+
+
+# Hombres
+
+```{r}
+#filtrado muestras
+rse_gene_Parkinson_male <- rse_gene_Parkinson[,rse_gene_Parkinson$sra_attribute.obsolete_sex == 'Male']
+rse_gene_Parkinson_male$sra_attribute.obsolete_sex <- droplevels(rse_gene_Parkinson_male$sra_attribute.obsolete_sex)
+rse_gene_Parkinson_male$sra_attribute.obsolete_sex
+# Calculo de los niveles medios de expresión de los genes en las muestras.
+
+gene_means <- rowMeans(assay(rse_gene_Parkinson_male, "counts"))
+summary(gene_means)
+
+## Eliminamos genes con un promedio de expresión menor que la mediana
+rse_gene_Parkinson_male <- rse_gene_Parkinson_male[gene_means > 3.1, ]
+
+## Dimensiones finales
+dim(rse_gene_Parkinson_male)
+
+## Porcentaje de genes que retuvimos
+round(nrow(rse_gene_Parkinson_male) / nrow(rse_gene_Parkinson_unfiltered) * 100, 2)
+
+```
+
+### Normalización de datos
+
+```{r}
+library("edgeR") # BiocManager::install("edgeR", update = FALSE)
+dge <- DGEList(
+    counts = assay(rse_gene_Parkinson_male, "counts"),
+    genes = rowData(rse_gene_Parkinson_male)
+)
+dge <- calcNormFactors(dge)
+
+```
+
+```{r}
+  mod <- model.matrix(~ sra_attribute.disease,
+    data = colData(rse_gene_Parkinson_male)
+)
+colnames(mod)  
+```
+### Expresión diferencial
+
+Análisis de expresión diferencial con modelo estadístico.
+
+```{r run_limma_male}
+#library("limma")
+vGene <- voom(dge, mod, plot = TRUE)
+
+eb_results <- eBayes(lmFit(vGene))
+
+de_results <- topTable(
+    eb_results,
+    coef = 2,
+    number = nrow(rse_gene_Parkinson_male),
+    sort.by = 'none'
+)
+dim(de_results)
+head(de_results)
+
+## Genes diferencialmente expresados entre pre y post natal con FDR < 5%
+table(de_results$adj.P.Val < 0.05)
+
+## Visualicemos los resultados estadísticos
+limma::plotMA(eb_results, coef = 2)
+
+volcanoplot(eb_results, coef = 2, highlight = 10, names = de_results$gene_name)
+```
+### PDF de heatmap
+
+```{r pheatmap_male}
+## Extraer valores de los genes de interés
+exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
+
+## Creemos una tabla con información de las muestras
+## y con nombres de columnas más amigables
+df <- as.data.frame(colData(rse_gene_Parkinson_male)[, c("sra_attribute.disease", "sra_attribute.obsolete_sex")])
+colnames(df) <- c("Disease", "Sex")
+
+
+rownames(exprs_heatmap) <- rowRanges(rse_gene_Parkinson_male)$gene_name[
+    match(rownames(exprs_heatmap), rowRanges(rse_gene_Parkinson_male)$gene_id)
+]
+
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = TRUE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+
+
+```
+```{r}
+pdf("pheatmap_Parkinson_Male.pdf", height = 14, useDingbats = FALSE)
+pheatmap(
+    exprs_heatmap,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    show_rownames = TRUE,
+    show_colnames = FALSE,
+    annotation_col = df
+)
+dev.off()
+```
+
+
+# Concordancia
+
+Top 50 de los genes con expresión difernecial en mujeres y hombres
+
+```{r}
+genes_male<-rownames(exprs_heatmap)
+genes_female <- rownames(exprs_heatmap)
+genes_female
+genes_male
+
+```
+Al parecer el gen RP11-313J2.1 se comparte entre ambos grupos
+
+```{r expresión_RP11-313J2.1}
+gene_pos<- match("RP11-313J2.1",rowRanges(rse_gene_Parkinson)$gene_name)
+
+boxplot(with(colData(rse_gene_Parkinson),tapply(assay(rse_gene_Parkinson[gene_pos,],'counts'),sra_attribute.disease,as.vector)),main='Expresión de RP11-313J2.1')
+```
+
+
+
+
+
