@@ -2,7 +2,10 @@
 title: "Proyecto"
 author: "Andrea Monzalvo"
 date: "28/2/2021"
-output: 
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
   html_document:
     df_print: paged
     code_folding: show
