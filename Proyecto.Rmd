@@ -210,7 +210,6 @@ pheatmap(
 )
 
 ```
-
 ```{r}
 pdf("pheatmap_Parkinson_female.pdf", height = 14, useDingbats = FALSE)
 pheatmap(
@@ -295,7 +294,7 @@ volcanoplot(eb_results, coef = 2, highlight = 10, names = de_results$gene_name)
 ```
 ### PDF de heatmap
 
-```{r pheatmap_male, message=FALSE}
+```{r pheatmap_male}
 ## Extraer valores de los genes de interés
 exprs_heatmap <- vGene$E[rank(de_results$adj.P.Val) <= 50, ]
 
@@ -320,7 +319,6 @@ pheatmap(
 
 
 ```
-
 ```{r}
 pdf("pheatmap_Parkinson_Male.pdf", height = 14, useDingbats = FALSE)
 pheatmap(
